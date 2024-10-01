@@ -43,6 +43,9 @@ const MessagingInterface: React.FC = () => {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  const foundSession = chatSessions.find((s) => s.id === activeSession);
+  const imageId = foundSession ? foundSession.id % 4 : 1;
+
   const loadChatSessions = useCallback(async (nextPage: number = 1) => {
     try {
       setLoadingMore(true);
@@ -67,8 +70,12 @@ const MessagingInterface: React.FC = () => {
       setChatSessions((prev) => [...prev, ...sortedChatSessions]);
       setTotalPageCount(data.total_pages || null);
       setCurrentPage((prev) => prev + 1);
-    } catch (error: any) {
-      setErrorMessage(error.message);
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("An unknown error occurred.");
+      }
       setSnackbarVisible(true);
     } finally {
       setLoadingMore(false);
@@ -201,16 +208,13 @@ const MessagingInterface: React.FC = () => {
                 onClick={onBackClick}
               />
               <Image
-                src={
-                  avatars[
-                    chatSessions.find((s) => s.id === activeSession)?.id! % 4
-                  ]
-                }
+                src={avatars[imageId]}
                 alt="User Icon"
                 className="size-10 object-cover"
               />
               <h2 className="ml-3 text-xl font-semibold text-gray-800">
-                {chatSessions.find((s) => s.id === activeSession)?.name}
+                {chatSessions.find((s) => s.id === activeSession)?.name ||
+                  "Unknown"}
               </h2>
             </div>
             <div className="flex-grow overflow-y-auto p-4 pt-24 h-screen">
@@ -228,11 +232,11 @@ const MessagingInterface: React.FC = () => {
                         : "bg-[#000929] text-white"
                     }`}
                   >
-                    {message.content}
+                    <p>{message.content}</p>
+                    <span className="text-xs text-gray-300">
+                      {getMessageTimestamp(message.timestamp)}
+                    </span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {getMessageTimestamp(message.timestamp)}
-                  </p>
                 </div>
               ))}
               <div ref={messagesEndRef} />
