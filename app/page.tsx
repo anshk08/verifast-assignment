@@ -1,101 +1,247 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { FaSpinner } from "react-icons/fa";
+import AvatarImage1 from "../public/avatar1.png";
+import AvatarImage2 from "../public/avatar2.png";
+import AvatarImage3 from "../public/avatar3.png";
+import AvatarImage4 from "../public/avatar4.png";
+import SnackbarNotification from "@/components/snackbar";
+import { format, formatDistanceToNow } from "date-fns";
 import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 
-export default function Home() {
+interface IChatSession {
+  id: number;
+  name: string;
+  messages: IMessage[];
+  message_count: number;
+  role?: string;
+}
+
+interface IMessage {
+  id: number;
+  content: string;
+  action: "USER" | "AI";
+  timestamp: string;
+}
+
+const CHAT_API_URL =
+  "https://admin-backend-docker-india-306034828043.asia-south2.run.app/nlp/api/chat_sessions";
+
+const avatars = [AvatarImage1, AvatarImage2, AvatarImage3, AvatarImage4];
+
+const MessagingInterface: React.FC = () => {
+  const [chatSessions, setChatSessions] = useState<IChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<number | null>(null);
+  const [chatMessages, setChatMessages] = useState<IMessage[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPageCount, setTotalPageCount] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSnackbarVisible, setSnackbarVisible] = useState(false);
+  const [isLoadingMore, setLoadingMore] = useState(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const loadChatSessions = useCallback(async (nextPage: number = 1) => {
+    try {
+      setLoadingMore(true);
+      const response = await fetch(
+        `${CHAT_API_URL}?page=${nextPage}&per_page=20`
+      );
+      if (!response.ok) {
+        throw new Error("Unable to fetch sessions. Please try again.");
+      }
+      const data = await response.json();
+
+      const sortedChatSessions = data.chat_sessions.sort(
+        (a: IChatSession, b: IChatSession) => {
+          const aLatestMsg = a.messages[0]?.timestamp || new Date(0);
+          const bLatestMsg = b.messages[0]?.timestamp || new Date(0);
+          return (
+            new Date(bLatestMsg).getTime() - new Date(aLatestMsg).getTime()
+          );
+        }
+      );
+
+      setChatSessions((prev) => [...prev, ...sortedChatSessions]);
+      setTotalPageCount(data.total_pages || null);
+      setCurrentPage((prev) => prev + 1);
+    } catch (error: any) {
+      setErrorMessage(error.message);
+      setSnackbarVisible(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadChatSessions();
+  }, [loadChatSessions]);
+
+  const loadMoreSessions = () => {
+    if (totalPageCount && currentPage <= totalPageCount) {
+      loadChatSessions(currentPage);
+    }
+  };
+
+  const lastChatSessionElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (totalPageCount !== null && currentPage > totalPageCount) return;
+      if (observerRef.current) observerRef.current.disconnect();
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          loadChatSessions();
+        }
+      });
+      if (node) observerRef.current.observe(node);
+    },
+    [loadChatSessions, totalPageCount, currentPage]
+  );
+
+  const onSessionSelect = useCallback(
+    (sessionId: number) => {
+      const selectedSession = chatSessions.find(
+        (session) => session.id === sessionId
+      );
+      if (selectedSession) {
+        setActiveSession(sessionId);
+        setChatMessages(selectedSession.messages);
+      }
+    },
+    [chatSessions]
+  );
+
+  const getSessionTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return `${formatDistanceToNow(date, { addSuffix: true })}`;
+  };
+
+  const getMessageTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return `Today ${format(date, "HH:mm")}`;
+  };
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
+
+  const onBackClick = () => {
+    setActiveSession(null);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="flex h-screen flex-col md:flex-row bg-gray-50 font-sans">
+      <SnackbarNotification
+        message={errorMessage || ""}
+        isVisible={isSnackbarVisible}
+        onClose={() => setSnackbarVisible(false)}
+      />
+      <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r overflow-hidden flex flex-col">
+        <div className="border-b bg-white flex items-center justify-center p-4">
+          <h1 className="text-2xl font-semibold text-gray-600">Messaging</h1>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="flex-grow overflow-y-auto">
+          {chatSessions.map((session, index) => (
+            <div
+              key={session.id}
+              ref={
+                index === chatSessions.length - 1
+                  ? lastChatSessionElementRef
+                  : null
+              }
+              className={`flex items-center p-4 hover:bg-blue-50 transition duration-200 cursor-pointer rounded-md ${
+                activeSession === session.id ? "bg-blue-200" : ""
+              } border-b border-gray-200`}
+              onClick={() => onSessionSelect(session.id)}
+            >
+              <div className="w-12 h-12 rounded-full bg-orange-300 flex items-center justify-center overflow-hidden">
+                <Image
+                  src={avatars[session.id % 4]}
+                  alt={session.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="ml-4 flex-grow">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {session.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {session.role ||
+                    (session.messages.length > 0 &&
+                      getSessionTimestamp(session.messages[0].timestamp))}
+                </p>
+              </div>
+            </div>
+          ))}
+          {totalPageCount && currentPage <= totalPageCount && (
+            <div className="flex justify-center items-center py-4">
+              <button
+                onClick={loadMoreSessions}
+                className="flex items-center bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-200"
+              >
+                {isLoadingMore ? (
+                  <FaSpinner className="animate-spin mr-2" />
+                ) : (
+                  "Load More"
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col bg-gray-50">
+        {activeSession && (
+          <>
+            <div className="flex items-center p-4 border-b bg-white fixed w-full">
+              <ArrowLeft
+                className="md:hidden mr-2 cursor-pointer"
+                onClick={onBackClick}
+              />
+              <Image
+                src={
+                  avatars[
+                    chatSessions.find((s) => s.id === activeSession)?.id! % 4
+                  ]
+                }
+                alt="User Icon"
+                className="size-10 object-cover"
+              />
+              <h2 className="ml-3 text-xl font-semibold text-gray-800">
+                {chatSessions.find((s) => s.id === activeSession)?.name}
+              </h2>
+            </div>
+            <div className="flex-grow overflow-y-auto p-4 pt-24 h-screen">
+              {chatMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`mb-4 flex flex-col ${
+                    message.action === "USER" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[70%] p-3 rounded-lg ${
+                      message.action === "USER"
+                        ? "bg-[#2E3B5B] text-white"
+                        : "bg-[#000929] text-white"
+                    }`}
+                  >
+                    {message.content}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {getMessageTimestamp(message.timestamp)}
+                  </p>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default MessagingInterface;
